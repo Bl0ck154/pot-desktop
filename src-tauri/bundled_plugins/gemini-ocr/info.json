@@ -1,0 +1,127 @@
+{
+  "id": "plugin.coulsontl.recognize.gemini",
+  "plugin_type": "recognize",
+  "icon": "gemini.svg",
+  "display": "Gemini OCR",
+  "homepage": "https://github.com/Bl0ck154/pot-gemini-ocr-patched",
+  "needs": [
+    {
+      "key": "apiBaseUrl",
+      "display": "API Base URL",
+      "default": "https://generativelanguage.googleapis.com/v1beta",
+      "desc": "Use the default Google Gemini Developer API endpoint unless you use a proxy.",
+      "type": "input"
+    },
+    {
+      "key": "apiKey",
+      "display": "Gemini API Key",
+      "type": "input",
+      "desc": "Create one at https://aistudio.google.com/app/apikey"
+    },
+    {
+      "key": "useStream",
+      "display": "Streaming output",
+      "type": "select",
+      "options": {
+        "false": "No (recommended)",
+        "true": "Yes"
+      },
+      "default": "false"
+    },
+    {
+      "key": "modelName",
+      "display": "Model preset",
+      "desc": "Static presets can become stale. Prefer Custom and paste the current model name from Google AI Studio if a preset fails.",
+      "type": "select",
+      "options": {
+        "custom": "Custom model name (recommended)",
+        "gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite (current/fast)",
+        "gemini-flash-latest": "Gemini Flash Latest",
+        "gemini-flash-lite-latest": "Gemini Flash-Lite Latest",
+        "gemini-pro-latest": "Gemini Pro Latest",
+        "gemini-2.5-flash": "Gemini 2.5 Flash (stable fallback)",
+        "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite (cheap/fast)",
+        "gemini-2.5-pro": "Gemini 2.5 Pro",
+        "gemini-2.0-flash": "Gemini 2.0 Flash (fallback)",
+        "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite (fallback)",
+        "gemini-2.5-flash-image": "Nano Banana / Gemini 2.5 Flash Image"
+      },
+      "default": "custom"
+    },
+    {
+      "key": "customModelName",
+      "display": "Custom model name",
+      "type": "input",
+      "default": "gemini-3.1-flash-lite",
+      "desc": "Used when Model preset is Custom. Paste any current Gemini Developer API model name here, for example gemini-3.1-flash-lite."
+    },
+    {
+      "key": "systemPrompt",
+      "display": "System Prompt",
+      "type": "input",
+      "desc": "Optional. Leave empty for normal OCR."
+    },
+    {
+      "key": "userPrompt",
+      "display": "OCR Prompt",
+      "type": "input",
+      "default": "Extract all visible text from the image exactly as written. Preserve the original language, alphabet, punctuation, line breaks, and casing. Do not translate. Do not explain. Return only the recognized text.",
+      "desc": "Instruction sent with the screenshot."
+    },
+    {
+      "key": "temperature",
+      "display": "Temperature",
+      "desc": "Use 0 for deterministic OCR.",
+      "type": "input",
+      "default": "0"
+    },
+    {
+      "key": "topP",
+      "display": "Top P",
+      "desc": "Default 0.95 is fine.",
+      "type": "input",
+      "default": "0.95"
+    },
+    {
+      "key": "thinkingBudget",
+      "display": "Thinking budget",
+      "desc": "Optional legacy numeric thinkingBudget. Leave empty for Gemini 3.1. Use Extra generationConfig JSON for thinkingLevel.",
+      "type": "input"
+    },
+    {
+      "key": "requestArguments",
+      "display": "Extra generationConfig JSON",
+      "type": "input",
+      "default": "{\"thinkingConfig\":{\"thinkingLevel\":\"MINIMAL\"}}",
+      "desc": "Optional advanced JSON merged into generationConfig. For Gemini 3.1 use {\"thinkingConfig\":{\"thinkingLevel\":\"MINIMAL\"}}"
+    }
+  ],
+  "language": {
+    "auto": "auto",
+    "zh_cn": "zh",
+    "zh_tw": "zh_HANT",
+    "en": "en",
+    "ja": "ja",
+    "ko": "ko",
+    "fr": "fr",
+    "es": "es",
+    "ru": "ru",
+    "de": "de",
+    "it": "it",
+    "tr": "tr",
+    "pt_pt": "pt",
+    "pt_br": "pt",
+    "vi": "vi",
+    "id": "id",
+    "th": "th",
+    "ms": "ms",
+    "ar": "ar",
+    "hi": "hi",
+    "mn_cy": "mn",
+    "mn_mo": "mn",
+    "km": "km",
+    "nb_no": "no",
+    "nn_no": "no",
+    "fa": "fa"
+  }
+}

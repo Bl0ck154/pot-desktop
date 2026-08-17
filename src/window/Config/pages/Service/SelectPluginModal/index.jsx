@@ -35,7 +35,7 @@ export default function SelectPluginModal(props) {
                                     fullWidth
                                     variant='flat'
                                     onPress={() => {
-                                        openInBrowser('http://pot-app.com/plugin.html');
+                                        openInBrowser('https://github.com/Bl0ck154/pot-app-plugin-list');
                                     }}
                                 >
                                     <div className='w-full'>{t('config.service.view_plugin_list')}</div>

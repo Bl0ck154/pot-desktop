@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod backup;
+mod bundled_plugins;
 mod clipboard;
 mod cmd;
 mod config;
@@ -16,12 +17,13 @@ mod updater;
 mod window;
 
 use backup::*;
+use bundled_plugins::install_bundled_plugins;
 use clipboard::*;
 use cmd::*;
 use config::*;
 use hotkey::*;
 use lang_detect::*;
-use log::info;
+use log::{info, warn};
 use once_cell::sync::OnceCell;
 use screenshot::screenshot;
 use server::*;
@@ -75,6 +77,11 @@ fn main() {
             }
             // Global AppHandle
             APP.get_or_init(|| app.handle());
+            // Install patches bundled with this fork before config validation, so
+            // previously configured bundled services are considered available.
+            if let Err(error) = install_bundled_plugins(app) {
+                warn!("Failed to install bundled plugins: {}", error);
+            }
             // Init Config
             info!("Init Config Store");
             init_config(app);
@@ -139,6 +146,7 @@ fn main() {
             run_binary,
             open_devtools,
             register_shortcut_by_frontend,
+            replace_shortcut_by_frontend,
             update_tray,
             updater_window,
             screenshot,
