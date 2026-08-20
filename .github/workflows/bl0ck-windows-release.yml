@@ -6,6 +6,10 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/bl0ck-windows-release.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/bl0ck-windows-release.yml'
 
 permissions:
   contents: write
@@ -76,4 +80,4 @@ jobs:
           '@
 
           gh release delete $env:RELEASE_TAG --yes --cleanup-tag 2>$null
-          gh release create $env:RELEASE_TAG "${{ steps.installer.outputs.path }}" --target "$env:GITHUB_SHA" --title "$env:RELEASE_TITLE" --notes "$notes"
+          gh release create $env:RELEASE_TAG "${{ steps.installer.outputs.path }}" --target master --title "$env:RELEASE_TITLE" --notes "$notes"
