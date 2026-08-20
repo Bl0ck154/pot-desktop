@@ -1,0 +1,79 @@
+name: Bl0ck Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/bl0ck-windows-release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: v3.0.7-bl0ck.1
+      RELEASE_TITLE: Pot 3.0.7 Bl0ck.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 21
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows x64 installer
+        run: pnpm tauri build -b nsis --target x86_64-pc-windows-msvc
+
+      - name: Locate installer
+        id: installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*setup*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'Windows installer was not produced' }
+          "path=$($installer.FullName)" >> $env:GITHUB_OUTPUT
+          "name=$($installer.Name)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pot-windows-x64
+          path: ${{ steps.installer.outputs.path }}
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @'
+          Custom Pot Desktop build based on Pot 3.0.7.
+
+          Included changes:
+          - Fixed unreliable global hotkey registration and editing.
+          - A failed shortcut no longer prevents the remaining shortcuts from registering.
+          - Hotkey changes are transactional, preserving the previous working shortcut if registration fails.
+          - Added hotkey registration/firing diagnostics.
+          - Bundled Bl0ck154 Gemini OCR patched plugin into the desktop build.
+
+          Windows x64 NSIS installer. This community fork build is not code-signed, so Windows SmartScreen may show a warning.
+          '@
+
+          gh release delete $env:RELEASE_TAG --yes --cleanup-tag 2>$null
+          gh release create $env:RELEASE_TAG "${{ steps.installer.outputs.path }}" --target "$env:GITHUB_SHA" --title "$env:RELEASE_TITLE" --notes "$notes"
