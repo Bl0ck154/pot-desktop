@@ -1,6 +1,6 @@
 [package]
 name = "pot"
-version = "3.0.7-bl0ck.3"
+version = "3.0.7-bl0ck.4"
 description = "Pot Desktop Bl0ck fork"
 authors = ["pot-app", "Bl0ck154"]
 license = "GPL-3.0-only"
