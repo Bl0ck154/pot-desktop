@@ -1,15 +1,14 @@
 {
     "name": "pot",
     "private": true,
-    "version": "3.0.7",
+    "version": "3.0.7-bl0ck.3",
     "type": "module",
+    "repository": "https://github.com/Bl0ck154/pot-desktop",
     "scripts": {
         "dev": "vite",
         "build": "vite build",
         "preview": "vite preview",
-        "tauri": "tauri",
-        "updater": "node updater/updater.mjs",
-        "updater:fixRuntime": "node updater/updater-for-fix-runtime.mjs"
+        "tauri": "tauri"
     },
     "dependencies": {
         "@nextui-org/react": "^2.4.8",

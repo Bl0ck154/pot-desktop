@@ -33,7 +33,7 @@ use tauri::api::notification::Notification;
 use tauri::Manager;
 use tauri_plugin_log::LogTarget;
 use tray::*;
-use updater::check_update;
+use updater::{check_bl0ck_update, check_update, install_bl0ck_update};
 use window::config_window;
 use window::updater_window;
 
@@ -108,13 +108,15 @@ fn main() {
             }
             match get("proxy_enable") {
                 Some(v) => {
-                    if v.as_bool().unwrap() && get("proxy_host").map_or(false, |host| !host.as_str().unwrap().is_empty()) {
+                    if v.as_bool().unwrap()
+                        && get("proxy_host").map_or(false, |host| !host.as_str().unwrap().is_empty())
+                    {
                         let _ = set_proxy();
                     }
                 }
                 None => {}
             }
-            // Check Update
+            // Check only the Bl0ck154 release channel for updates.
             check_update(app.handle());
             if let Some(engine) = get("translate_detect_engine") {
                 if engine.as_str().unwrap() == "local" {
@@ -149,6 +151,8 @@ fn main() {
             replace_shortcut_by_frontend,
             update_tray,
             updater_window,
+            check_bl0ck_update,
+            install_bl0ck_update,
             screenshot,
             lang_detect,
             webdav,
