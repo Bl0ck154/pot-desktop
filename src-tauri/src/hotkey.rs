@@ -15,9 +15,13 @@ use std::thread;
 #[cfg(target_os = "windows")]
 use std::time::Duration;
 #[cfg(target_os = "windows")]
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
+    MOD_SHIFT, MOD_WIN,
+};
+#[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
-    PeekMessageW, RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL,
-    MOD_NOREPEAT, MOD_SHIFT, MOD_WIN, MSG, PM_REMOVE, WM_HOTKEY,
+    PeekMessageW, MSG, PM_NOREMOVE, PM_REMOVE, WM_HOTKEY,
 };
 
 const SHORTCUT_NAMES: [&str; 4] = [
@@ -368,6 +372,15 @@ fn native_hotkey_thread(rx: mpsc::Receiver<NativeCommand>) {
     info!("[hotkey][native] Windows native hotkey service started");
     let mut registrations: HashMap<String, NativeRegistration> = HashMap::new();
 
+    // Explicitly create this worker thread's Win32 message queue before any
+    // RegisterHotKey calls. With hWnd == NULL, WM_HOTKEY is delivered to the
+    // calling thread's queue, so registration and message pumping must live on
+    // the same thread.
+    unsafe {
+        let mut message = MSG::default();
+        let _ = PeekMessageW(&mut message, None, 0, 0, PM_NOREMOVE);
+    }
+
     loop {
         while let Ok(command) = rx.try_recv() {
             match command {
@@ -411,7 +424,10 @@ fn native_hotkey_sender() -> &'static mpsc::Sender<NativeCommand> {
 }
 
 #[cfg(target_os = "windows")]
-fn send_native_command(command: NativeCommand, response_rx: mpsc::Receiver<Result<(), String>>) -> Result<(), String> {
+fn send_native_command(
+    command: NativeCommand,
+    response_rx: mpsc::Receiver<Result<(), String>>,
+) -> Result<(), String> {
     native_hotkey_sender()
         .send(command)
         .map_err(|error| format!("Native hotkey service is unavailable: {}", error))?;
