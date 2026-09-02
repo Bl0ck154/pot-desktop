@@ -6,7 +6,7 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/bl0ck-windows-release.yml'
-      - 'src/window/Recognize/ControlArea/index.jsx'
+      - 'src-tauri/tauri.conf.json'
 
 permissions:
   contents: write
@@ -14,12 +14,23 @@ permissions:
 jobs:
   build-release:
     runs-on: windows-latest
-    env:
-      RELEASE_TAG: v3.0.7-bl0ck.2
-      RELEASE_TITLE: Pot 3.0.7 Bl0ck.2
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read app version
+        id: version
+        shell: pwsh
+        run: |
+          $config = Get-Content 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json
+          $version = $config.package.version
+          if (-not $version) { throw 'Version is missing from src-tauri/tauri.conf.json' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "title=Pot Bl0ck $version" >> $env:GITHUB_OUTPUT
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,40 +53,107 @@ jobs:
       - name: Build Windows x64 installer
         run: pnpm tauri build -b nsis --target x86_64-pc-windows-msvc
 
-      - name: Locate installer
+      - name: Locate installer and create checksum
         id: installer
         shell: pwsh
         run: |
           $installer = Get-ChildItem 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*setup*.exe' | Select-Object -First 1
           if (-not $installer) { throw 'Windows installer was not produced' }
+
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $checksum = Join-Path $env:RUNNER_TEMP 'SHA256SUMS.txt'
+          "$hash  $($installer.Name)" | Set-Content -Path $checksum -Encoding ascii
+
           "path=$($installer.FullName)" >> $env:GITHUB_OUTPUT
           "name=$($installer.Name)" >> $env:GITHUB_OUTPUT
+          "hash=$hash" >> $env:GITHUB_OUTPUT
+          "checksum=$checksum" >> $env:GITHUB_OUTPUT
+
+      - name: Prepare release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+          $previous = git tag --list 'v*-bl0ck.*' --sort=-version:refname |
+            Where-Object { $_ -ne $tag } |
+            Select-Object -First 1
+
+          if ($previous) {
+            $changes = (git log "$previous..HEAD" --pretty=format:'- %s') -join "`n"
+          } else {
+            $changes = '- First Pot Bl0ck release.'
+          }
+
+          if (-not $changes) {
+            $changes = '- Maintenance release.'
+          }
+
+          $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          $notes = @"
+          ## Pot Bl0ck ${{ steps.version.outputs.version }}
+
+          $changes
+
+          ### Update channel
+          - Updates are checked only against Bl0ck154/pot-desktop.
+          - The app downloads the Windows installer directly from this GitHub release.
+          - The installer SHA-256 is verified before it is started.
+          - The installer runs silently and Pot restarts after the update.
+
+          Windows x64 NSIS installer. This community fork is not code-signed, so Windows SmartScreen may show a warning on a fresh manual install.
+          "@
+          $notes | Set-Content -Path $notesPath -Encoding utf8NoBOM
+          "path=$notesPath" >> $env:GITHUB_OUTPUT
+
+      - name: Create update manifest
+        id: manifest
+        shell: pwsh
+        run: |
+          $manifestPath = Join-Path $env:RUNNER_TEMP 'update.json'
+          $body = Get-Content '${{ steps.notes.outputs.path }}' -Raw
+          $tag = '${{ steps.version.outputs.tag }}'
+          $assetName = '${{ steps.installer.outputs.name }}'
+
+          $manifest = [ordered]@{
+            version = '${{ steps.version.outputs.version }}'
+            releaseName = '${{ steps.version.outputs.title }}'
+            body = $body
+            publishedAt = (Get-Date).ToUniversalTime().ToString('o')
+            releaseUrl = "https://github.com/Bl0ck154/pot-desktop/releases/tag/$tag"
+            downloadUrl = "https://github.com/Bl0ck154/pot-desktop/releases/download/$tag/$assetName"
+            assetName = $assetName
+            sha256 = '${{ steps.installer.outputs.hash }}'
+          }
+
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content -Path $manifestPath -Encoding utf8NoBOM
+          "path=$manifestPath" >> $env:GITHUB_OUTPUT
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: pot-windows-x64
-          path: ${{ steps.installer.outputs.path }}
+          path: |
+            ${{ steps.installer.outputs.path }}
+            ${{ steps.installer.outputs.checksum }}
+            ${{ steps.manifest.outputs.path }}
           if-no-files-found: error
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = @'
-          Custom Pot Desktop build based on Pot 3.0.7.
+          $tag = '${{ steps.version.outputs.tag }}'
+          $title = '${{ steps.version.outputs.title }}'
+          $installer = '${{ steps.installer.outputs.path }}'
+          $checksum = '${{ steps.installer.outputs.checksum }}'
+          $manifest = '${{ steps.manifest.outputs.path }}'
+          $notes = '${{ steps.notes.outputs.path }}'
 
-          Included changes:
-          - Fixed unreliable global hotkey registration and editing.
-          - A failed shortcut no longer prevents the remaining shortcuts from registering.
-          - Hotkey changes are transactional, preserving the previous working shortcut if registration fails.
-          - Added hotkey registration/firing diagnostics.
-          - Fixed the OCR Recognize window Translate button sometimes creating a hidden translation window.
-          - Bundled Bl0ck154 Gemini OCR patched plugin into the desktop build.
-
-          Windows x64 NSIS installer. This community fork build is not code-signed, so Windows SmartScreen may show a warning.
-          '@
-
-          gh release delete $env:RELEASE_TAG --yes --cleanup-tag 2>$null
-          gh release create $env:RELEASE_TAG "${{ steps.installer.outputs.path }}" --target "$env:GITHUB_SHA" --title "$env:RELEASE_TITLE" --notes "$notes"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $installer $checksum $manifest --clobber
+            gh release edit $tag --target "$env:GITHUB_SHA" --title $title --notes-file $notes
+          } else {
+            gh release create $tag $installer $checksum $manifest --target "$env:GITHUB_SHA" --title $title --notes-file $notes
+          }
