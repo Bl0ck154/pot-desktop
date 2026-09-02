@@ -1,7 +1,7 @@
 {
     "name": "pot",
     "private": true,
-    "version": "3.0.7-bl0ck.3",
+    "version": "3.0.7-bl0ck.4",
     "type": "module",
     "repository": "https://github.com/Bl0ck154/pot-desktop",
     "scripts": {
