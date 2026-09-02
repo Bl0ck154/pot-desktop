@@ -8,7 +8,7 @@
     },
     "package": {
         "productName": "pot",
-        "version": "3.0.7-bl0ck.3"
+        "version": "3.0.7-bl0ck.4"
     },
     "tauri": {
         "allowlist": {
