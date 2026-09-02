@@ -6,6 +6,7 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/bl0ck-windows-release.yml'
+      - 'src/window/Recognize/ControlArea/index.jsx'
 
 permissions:
   contents: write
@@ -14,8 +15,8 @@ jobs:
   build-release:
     runs-on: windows-latest
     env:
-      RELEASE_TAG: v3.0.7-bl0ck.1
-      RELEASE_TITLE: Pot 3.0.7 Bl0ck.1
+      RELEASE_TAG: v3.0.7-bl0ck.2
+      RELEASE_TITLE: Pot 3.0.7 Bl0ck.2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,6 +71,7 @@ jobs:
           - A failed shortcut no longer prevents the remaining shortcuts from registering.
           - Hotkey changes are transactional, preserving the previous working shortcut if registration fails.
           - Added hotkey registration/firing diagnostics.
+          - Fixed the OCR Recognize window Translate button sometimes creating a hidden translation window.
           - Bundled Bl0ck154 Gemini OCR patched plugin into the desktop build.
 
           Windows x64 NSIS installer. This community fork build is not code-signed, so Windows SmartScreen may show a warning.
