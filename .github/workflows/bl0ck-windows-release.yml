@@ -7,6 +7,14 @@ on:
     paths:
       - '.github/workflows/bl0ck-windows-release.yml'
       - 'src-tauri/tauri.conf.json'
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/bl0ck-windows-release.yml'
+      - 'src-tauri/**'
+      - 'src/window/Updater/**'
+      - 'src/window/Config/pages/About/**'
+      - 'package.json'
 
 permissions:
   contents: write
@@ -139,6 +147,7 @@ jobs:
           if-no-files-found: error
 
       - name: Create or update GitHub Release
+        if: github.event_name != 'pull_request'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
