@@ -1,104 +1,65 @@
 import { fetch, Body } from '@tauri-apps/api/http';
 
-const TOKEN_URL = 'https://edge.microsoft.com/translate/auth';
-const TRANSLATE_URL = 'https://api-edge.cognitive.microsofttranslator.com/translate';
+const TRANSLATE_URL = 'https://edge.microsoft.com/translate/translatetext';
 const USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0';
 
-let cachedToken = '';
-let cachedTokenExpiresAt = 0;
-let tokenPromise = null;
+function normalizeLanguage(language, isTarget = false) {
+    const value = (language ?? '').trim();
+    if (!value || value.toLowerCase() === 'auto') {
+        return isTarget ? value : '';
+    }
 
-function getTokenExpiry(token) {
-    try {
-        const payload = token.split('.')[1];
-        if (!payload) return 0;
-        const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-        const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-        const decoded = JSON.parse(atob(padded));
-        return (decoded.exp ?? 0) * 1000;
-    } catch (_) {
-        return 0;
+    switch (value.toLowerCase()) {
+        case 'zh':
+        case 'zh-cn':
+            return 'zh-Hans';
+        case 'zh-tw':
+            return 'zh-Hant';
+        default:
+            return value;
     }
 }
 
-async function fetchToken() {
-    const response = await fetch(TOKEN_URL, {
-        method: 'GET',
-        headers: { 'User-Agent': USER_AGENT },
-        responseType: 2,
-    });
-
-    if (!response.ok || !response.data) {
-        throw new Error(`Microsoft translator auth failed (${response.status})`);
+function compactError(res) {
+    let detail = '';
+    if (typeof res.data === 'string') {
+        detail = res.data.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 220);
+    } else if (res.data !== undefined && res.data !== null) {
+        detail = JSON.stringify(res.data).slice(0, 220);
     }
-
-    const token = String(response.data).trim();
-    cachedToken = token;
-    // Edge tokens are normally valid for roughly ten minutes. Prefer the JWT
-    // exp claim and keep a one-minute safety margin; use eight minutes if the
-    // token format ever changes.
-    const expiry = getTokenExpiry(token);
-    cachedTokenExpiresAt = expiry ? expiry - 60_000 : Date.now() + 8 * 60_000;
-    return token;
-}
-
-async function getToken(forceRefresh = false) {
-    if (!forceRefresh && cachedToken && cachedTokenExpiresAt > Date.now()) {
-        return cachedToken;
-    }
-    if (!tokenPromise) {
-        tokenPromise = fetchToken().finally(() => {
-            tokenPromise = null;
-        });
-    }
-    return tokenPromise;
-}
-
-async function requestTranslation(text, from, to, token) {
-    const query = {
-        to,
-        'api-version': '3.0',
-        includeSentenceLength: 'true',
-    };
-    if (from) query.from = from;
-
-    return fetch(TRANSLATE_URL, {
-        method: 'POST',
-        headers: {
-            accept: '*/*',
-            authorization: 'Bearer ' + token,
-            'content-type': 'application/json',
-            'User-Agent': USER_AGENT,
-        },
-        query,
-        body: Body.json([{ Text: text }]),
-    });
+    return `Microsoft Translate request failed (${res.status})${detail ? `\n${detail}` : ''}`;
 }
 
 export async function translate(text, from, to) {
-    let token = await getToken();
-    let res = await requestTranslation(text, from, to, token);
+    // Microsoft retired edge.microsoft.com/translate/auth in July 2026. The
+    // replacement Edge web-translation endpoint is keyless and expects a bare
+    // JSON array of strings rather than the old [{ Text }] Azure body.
+    const res = await fetch(TRANSLATE_URL, {
+        method: 'POST',
+        headers: {
+            accept: 'application/json,text/plain,*/*',
+            'content-type': 'application/json',
+            'User-Agent': USER_AGENT,
+        },
+        query: {
+            from: normalizeLanguage(from, false),
+            to: normalizeLanguage(to, true),
+            isEnterpriseClient: 'false',
+        },
+        body: Body.json([text]),
+    });
 
-    // The anonymous Edge token can occasionally be invalidated before its JWT
-    // expiry. Refresh once instead of making the user retry manually.
-    if (res.status === 401 || res.status === 403) {
-        cachedToken = '';
-        cachedTokenExpiresAt = 0;
-        token = await getToken(true);
-        res = await requestTranslation(text, from, to, token);
+    if (!res.ok) {
+        throw new Error(compactError(res));
     }
 
-    if (res.ok) {
-        const result = res.data;
-        const translated = result?.[0]?.translations?.[0]?.text;
-        if (translated) {
-            return translated.trim();
-        }
-        throw JSON.stringify(result);
+    const translated = res.data?.[0]?.translations?.[0]?.text;
+    if (!translated) {
+        throw new Error(`Microsoft Translate returned an unexpected response\n${JSON.stringify(res.data).slice(0, 220)}`);
     }
 
-    throw `Microsoft Translate request failed (${res.status})\n${JSON.stringify(res.data).slice(0, 300)}`;
+    return translated.trim();
 }
 
 export * from './Config';
