@@ -31,18 +31,28 @@ export default function TranslatePanel({ text, onClose }) {
     const [pluginList, setPluginList] = useState(null);
     const [serviceInstanceConfigMap, setServiceInstanceConfigMap] = useState(null);
     const { t } = useTranslation();
+    const displayText = (text ?? '').trim();
 
     useEffect(() => {
         let cancelled = false;
         const normalized = (text ?? '').trim();
-        setSourceText(normalized);
+        setSourceText('');
         setDetectLanguage('');
 
-        if (normalized) {
-            detect(normalized).then((language) => {
-                if (!cancelled) setDetectLanguage(language);
+        if (!normalized) return undefined;
+
+        detect(normalized)
+            .then((language) => {
+                if (cancelled) return;
+                setDetectLanguage(language);
+                // TargetArea listens to sourceText. Set it only after language
+                // detection so auto-source + same-target can correctly switch
+                // to the configured second language on the first request.
+                setSourceText(normalized);
+            })
+            .catch(() => {
+                if (!cancelled) setSourceText(normalized);
             });
-        }
 
         return () => {
             cancelled = true;
@@ -128,7 +138,7 @@ export default function TranslatePanel({ text, onClose }) {
                     <CardBody className='p-[12px] pb-0'>
                         <textarea
                             readOnly
-                            value={sourceText}
+                            value={displayText}
                             className='min-h-[72px] max-h-[150px] w-full resize-none bg-transparent select-text outline-none'
                         />
                     </CardBody>
@@ -138,8 +148,8 @@ export default function TranslatePanel({ text, onClose }) {
                                 isIconOnly
                                 size='sm'
                                 variant='light'
-                                isDisabled={!sourceText}
-                                onPress={() => writeText(sourceText)}
+                                isDisabled={!displayText}
+                                onPress={() => writeText(displayText)}
                             >
                                 <MdContentCopy className='text-[16px]' />
                             </Button>
