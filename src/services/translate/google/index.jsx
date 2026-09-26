@@ -14,17 +14,17 @@ function normalizeHost(value) {
 
 function getHosts(config = {}) {
     const configured = normalizeHost(config.custom_url);
-    const legacyDefault = configured === '' || configured === LEGACY_GOOGLE_HOST;
 
     // translate.google.com increasingly answers desktop/non-browser clients with
-    // the Web Search "automated queries" 429 page. The gtx endpoint on
-    // translate.googleapis.com speaks the same response format and is much less
-    // likely to hit that interstitial, so migrate the old default transparently.
-    if (legacyDefault) {
+    // the Web Search "automated queries" 429 page. Prefer the gtx endpoint on
+    // translate.googleapis.com, but retain the legacy host as a final fallback.
+    // A user-supplied custom host remains first so existing proxy setups keep
+    // working, while old/default Pot configs migrate transparently.
+    if (!configured || configured === LEGACY_GOOGLE_HOST || configured === GOOGLE_API_HOST) {
         return [GOOGLE_API_HOST, LEGACY_GOOGLE_HOST];
     }
 
-    return [...new Set([configured, GOOGLE_API_HOST])];
+    return [...new Set([configured, GOOGLE_API_HOST, LEGACY_GOOGLE_HOST])];
 }
 
 function parseResult(result) {
@@ -104,11 +104,9 @@ export async function translate(text, from, to, options = {}) {
             }
 
             lastError = new Error(compactError(res, host));
-            // 403/429/5xx commonly mean an endpoint-specific block. Continue to
-            // the fallback host instead of surfacing the HTML interstitial.
-            if (res.status === 403 || res.status === 429 || res.status >= 500) {
-                continue;
-            }
+            // Continue to the next host for any endpoint-specific failure rather
+            // than surfacing the first HTML interstitial or regional block.
+            continue;
         } catch (error) {
             lastError = error instanceof Error ? error : new Error(String(error));
         }
