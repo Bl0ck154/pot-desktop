@@ -9,7 +9,7 @@ const deeplInstanceId = uuidv4().toLowerCase();
 const deeplSessionId = uuidv4().toLowerCase();
 
 export async function translate(text, from, to, options = {}) {
-    const { config } = options;
+    const { config = {} } = options;
 
     const serviceType = config['type'];
     if (serviceType === 'free') {
