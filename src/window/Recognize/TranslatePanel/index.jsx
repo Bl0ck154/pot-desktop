@@ -51,11 +51,14 @@ export default function TranslatePanel({ text, onClose }) {
 
     useEffect(() => {
         const loadPluginList = async () => {
-            const result = { translate: {} };
-            if (await exists('plugins/translate', { dir: BaseDirectory.AppConfig })) {
-                const plugins = await readDir('plugins/translate', { dir: BaseDirectory.AppConfig });
+            const result = { translate: {}, collection: {} };
+            for (const serviceType of ['translate', 'collection']) {
+                const pluginDir = `plugins/${serviceType}`;
+                if (!(await exists(pluginDir, { dir: BaseDirectory.AppConfig }))) continue;
+
+                const plugins = await readDir(pluginDir, { dir: BaseDirectory.AppConfig });
                 for (const plugin of plugins) {
-                    const infoStr = await readTextFile(`plugins/translate/${plugin.name}/info.json`, {
+                    const infoStr = await readTextFile(`${pluginDir}/${plugin.name}/info.json`, {
                         dir: BaseDirectory.AppConfig,
                     });
                     const pluginInfo = JSON.parse(infoStr);
@@ -63,11 +66,11 @@ export default function TranslatePanel({ text, onClose }) {
                         const appConfigDirPath = await appConfigDir();
                         const iconPath = await join(
                             appConfigDirPath,
-                            `/plugins/translate/${plugin.name}/${pluginInfo.icon}`
+                            `/${pluginDir}/${plugin.name}/${pluginInfo.icon}`
                         );
                         pluginInfo.icon = convertFileSrc(iconPath);
                     }
-                    result.translate[plugin.name] = pluginInfo;
+                    result[serviceType][plugin.name] = pluginInfo;
                 }
             }
             setPluginList(result);
