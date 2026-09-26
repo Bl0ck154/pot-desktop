@@ -3,7 +3,7 @@ import { appConfigDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/tauri';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { Button, Card, CardBody, CardFooter, Spacer, Tooltip } from '@nextui-org/react';
-import { useAtom, useSetAtom } from 'jotai';
+import { useSetAtom } from 'jotai';
 import React, { useEffect, useState } from 'react';
 import { MdClose, MdContentCopy } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
@@ -26,7 +26,7 @@ export default function TranslatePanel({ text, onClose }) {
     ]);
     const [ttsServiceInstanceList] = useConfig('tts_service_list', ['lingva_tts']);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
-    const [sourceText, setSourceText] = useAtom(sourceTextAtom);
+    const setSourceText = useSetAtom(sourceTextAtom);
     const setDetectLanguage = useSetAtom(detectLanguageAtom);
     const [pluginList, setPluginList] = useState(null);
     const [serviceInstanceConfigMap, setServiceInstanceConfigMap] = useState(null);
