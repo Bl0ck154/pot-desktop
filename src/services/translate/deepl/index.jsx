@@ -1,4 +1,12 @@
 import { fetch, Body } from '@tauri-apps/api/http';
+import { v4 as uuidv4 } from 'uuid';
+
+const DEEPL_ONESHOT_URL = 'https://oneshot-free.www.deepl.com/v1/translate';
+const DEEPL_APP_VERSION = '26.42';
+const DEEPL_APP_BUILD = '5443737';
+const DEEPL_OS_VERSION = '26.0';
+const deeplInstanceId = uuidv4().toLowerCase();
+const deeplSessionId = uuidv4().toLowerCase();
 
 export async function translate(text, from, to, options = {}) {
     const { config } = options;
@@ -15,53 +23,67 @@ export async function translate(text, from, to, options = {}) {
     }
 }
 
+function oneshotLanguageCode(language, isTarget = false) {
+    const normalized = language.toLowerCase();
+    switch (normalized) {
+        case 'zh':
+        case 'zh-cn':
+            return 'zh-Hans';
+        case 'zh-tw':
+            return 'zh-Hant';
+        case 'pt-pt':
+            return 'pt-PT';
+        case 'pt-br':
+            return 'pt-BR';
+        case 'en':
+            return isTarget ? 'en-US' : 'en';
+        default:
+            return normalized;
+    }
+}
+
 async function translate_by_free(text, from, to) {
-    const url = 'https://www2.deepl.com/jsonrpc';
-    const rand = getRandomNumber();
     const body = {
-        jsonrpc: '2.0',
-        method: 'LMT_handle_texts',
-        params: {
-            splitting: 'newlines',
-            lang: {
-                source_lang_user_selected: from !== 'auto' ? from.slice(0, 2) : 'auto',
-                target_lang: to.slice(0, 2),
-            },
-            texts: [{ text, requestAlternatives: 3 }],
-            timestamp: getTimeStamp(getICount(text)),
+        text: [text],
+        target_lang: oneshotLanguageCode(to, true),
+        usage_type: 'translate',
+        app_information: {
+            os: 'iOS',
+            os_version: DEEPL_OS_VERSION,
+            app_version: DEEPL_APP_VERSION,
+            app_build: DEEPL_APP_BUILD,
+            instance_id: deeplInstanceId,
         },
-        id: rand,
     };
-
-    let body_str = JSON.stringify(body);
-
-    if ((rand + 5) % 29 === 0 || (rand + 3) % 13 === 0) {
-        body_str = body_str.replace('"method":"', '"method" : "');
-    } else {
-        body_str = body_str.replace('"method":"', '"method": "');
+    if (from !== 'auto') {
+        body.source_lang = oneshotLanguageCode(from, false);
     }
 
-    let res = await fetch(url, {
+    const res = await fetch(DEEPL_ONESHOT_URL, {
         method: 'POST',
-        body: Body.text(body_str),
-        headers: { 'Content-Type': 'application/json' },
+        body: Body.json(body),
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'None',
+            'User-Agent': 'DeepL/26.42 CFNetwork/3826.600.41 Darwin/25.0.0',
+            'x-app-os-version': DEEPL_OS_VERSION,
+            'x-app-instance-id': deeplInstanceId,
+            'x-app-session-id': deeplSessionId,
+        },
     });
 
     if (res.ok) {
-        let result = res.data;
-        if (result && result.result && result.result.texts) {
-            return result.result.texts[0].text.trim();
-        } else {
-            throw JSON.stringify(result);
+        const translated = res.data?.translations?.[0]?.text;
+        if (translated) {
+            return translated.trim();
         }
-    } else {
-        if (res.data.error) {
-            throw `Status Code: ${res.status}\n${res.data.error.message}`;
-        } else {
-            throw `Http Request Error\nHttp Status: ${res.status}\n${JSON.stringify(res.data)}`;
-        }
+        throw JSON.stringify(res.data);
     }
+
+    const message = res.data?.message ?? res.data?.title ?? res.data?.error;
+    throw `DeepL request failed (${res.status})${message ? `\n${message}` : ''}`;
 }
+
 async function translate_by_deeplx(text, from, to, url) {
     let res = await fetch(url, {
         method: 'POST',
@@ -112,7 +134,7 @@ async function translate_by_key(text, from, to, key) {
 
     if (res.ok) {
         const result = res.data;
-        if ((result.translations, result.translations[0])) {
+        if (result.translations && result.translations[0]) {
             return result.translations[0].text.trim();
         } else {
             throw JSON.stringify(result);
@@ -124,25 +146,6 @@ async function translate_by_key(text, from, to, key) {
             throw `Http Request Error\nHttp Status: ${res.status}\n${JSON.stringify(res.data)}`;
         }
     }
-}
-
-function getTimeStamp(iCount) {
-    const ts = Date.now();
-    if (iCount !== 0) {
-        iCount = iCount + 1;
-        return ts - (ts % iCount) + iCount;
-    } else {
-        return ts;
-    }
-}
-
-function getICount(translate_text) {
-    return translate_text.split('i').length - 1;
-}
-
-function getRandomNumber() {
-    const rand = Math.floor(Math.random() * 99999) + 100000;
-    return rand * 1000;
 }
 
 export * from './Config';
