@@ -1,7 +1,10 @@
-import { fetch } from '@tauri-apps/api/http';
+import { fetch, Body } from '@tauri-apps/api/http';
 
+const GOOGLE_CLIENTS5_URL = 'https://clients5.google.com/translate_a/t';
 const GOOGLE_API_HOST = 'https://translate.googleapis.com';
 const LEGACY_GOOGLE_HOST = 'https://translate.google.com';
+const USER_AGENT =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
 
 function normalizeHost(value) {
     let host = (value ?? '').trim();
@@ -12,27 +15,45 @@ function normalizeHost(value) {
     return host.replace(/\/$/, '');
 }
 
-function getHosts(config = {}) {
-    const configured = normalizeHost(config.custom_url);
-
-    // translate.google.com increasingly answers desktop/non-browser clients with
-    // the Web Search "automated queries" 429 page. Prefer the gtx endpoint on
-    // translate.googleapis.com, but retain the legacy host as a final fallback.
-    // A user-supplied custom host remains first so existing proxy setups keep
-    // working, while old/default Pot configs migrate transparently.
-    if (!configured || configured === LEGACY_GOOGLE_HOST || configured === GOOGLE_API_HOST) {
-        return [GOOGLE_API_HOST, LEGACY_GOOGLE_HOST];
-    }
-
-    return [...new Set([configured, GOOGLE_API_HOST, LEGACY_GOOGLE_HOST])];
+function browserHeaders() {
+    // Since 2026 Google frequently rate-limits bare programmatic requests to
+    // /translate_a/single with a Web Search "automated queries" 429 page.
+    // These are the same minimal browser headers used by current clients.
+    return {
+        accept: '*/*',
+        'accept-language': 'en-US,en;q=0.9',
+        referer: 'https://translate.google.com/',
+        cookie: 'CONSENT=YES+cb',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': USER_AGENT,
+    };
 }
 
-function parseResult(result) {
+function parseClients5(result) {
+    if (!Array.isArray(result) || result.length === 0) {
+        throw new Error('Unexpected Google clients5 response');
+    }
+
+    // client=dict-chrome-ex currently returns either ["translation"] when the
+    // source is explicit or [["translation", "detected-language"]] for auto.
+    const first = result[0];
+    if (typeof first === 'string') return first.trim();
+    if (Array.isArray(first) && typeof first[0] === 'string') return first[0].trim();
+    if (Array.isArray(first?.[0]) && typeof first[0][0] === 'string') {
+        return first[0][0].trim();
+    }
+
+    throw new Error('Unexpected Google clients5 response');
+}
+
+function parseSingle(result) {
     if (!Array.isArray(result) || !Array.isArray(result[0])) {
         throw new Error('Unexpected Google Translate response');
     }
 
-    // Dictionary mode.
+    // Preserve Pot's dictionary result when this endpoint still supplies it.
     if (Array.isArray(result[1]) && result[1].length > 0) {
         const target = { pronunciations: [], explanations: [], associations: [], sentence: [] };
         const pronunciation = result?.[0]?.[1]?.[3];
@@ -60,53 +81,81 @@ function parseResult(result) {
         .trim();
 }
 
-function compactError(res, host) {
+function compactError(res, route) {
     let detail = '';
     if (typeof res.data === 'string') {
-        // Do not dump Google's multi-kilobyte "Sorry..." HTML into the UI.
-        detail = res.data.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+        detail = res.data.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
     } else if (res.data !== undefined && res.data !== null) {
-        detail = JSON.stringify(res.data).slice(0, 240);
+        detail = JSON.stringify(res.data).slice(0, 180);
     }
-    return `Google Translate request failed (${res.status}) via ${host}${detail ? `\n${detail}` : ''}`;
+    return `Google Translate request failed (${res.status}) via ${route}${detail ? `\n${detail}` : ''}`;
+}
+
+async function translateViaClients5(text, from, to) {
+    const body = `q=${encodeURIComponent(text)}`;
+    const res = await fetch(GOOGLE_CLIENTS5_URL, {
+        method: 'POST',
+        headers: {
+            ...browserHeaders(),
+            'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        },
+        query: {
+            client: 'dict-chrome-ex',
+            sl: from || 'auto',
+            tl: to,
+            ie: 'UTF-8',
+            oe: 'UTF-8',
+        },
+        body: Body.text(body),
+    });
+
+    if (!res.ok) {
+        throw new Error(compactError(res, 'clients5'));
+    }
+    return parseClients5(res.data);
+}
+
+async function translateViaSingle(host, text, from, to) {
+    const res = await fetch(`${host}/translate_a/single?dt=t&dt=bd&dt=rm&dt=ex`, {
+        method: 'GET',
+        headers: browserHeaders(),
+        query: {
+            // client=at currently uses a separate quota bucket from gtx and
+            // remains available on networks where gtx is returning 429.
+            client: 'at',
+            sl: from || 'auto',
+            tl: to,
+            hl: to,
+            ie: 'UTF-8',
+            oe: 'UTF-8',
+            q: text,
+        },
+    });
+
+    if (!res.ok) {
+        throw new Error(compactError(res, host));
+    }
+    return parseSingle(res.data);
 }
 
 export async function translate(text, from, to, options = {}) {
-    const hosts = getHosts(options.config ?? {});
+    const configured = normalizeHost(options.config?.custom_url);
+    const routes = [];
+
+    // The Chrome Dictionary endpoint is now the default Google route because
+    // the old public gtx endpoint is heavily IP-rate-limited in 2026.
+    routes.push(() => translateViaClients5(text, from, to));
+
+    if (configured && configured !== GOOGLE_API_HOST && configured !== LEGACY_GOOGLE_HOST) {
+        routes.push(() => translateViaSingle(configured, text, from, to));
+    }
+    routes.push(() => translateViaSingle(GOOGLE_API_HOST, text, from, to));
+    routes.push(() => translateViaSingle(LEGACY_GOOGLE_HOST, text, from, to));
+
     let lastError = null;
-
-    for (const host of hosts) {
+    for (const route of routes) {
         try {
-            // Request the small set of metadata used by Pot's dictionary UI in
-            // addition to the translated text. Keeping repeated dt parameters
-            // in the URL avoids them being flattened by Tauri's query object.
-            const res = await fetch(`${host}/translate_a/single?dt=t&dt=bd&dt=rm&dt=ex`, {
-                method: 'GET',
-                headers: {
-                    accept: 'application/json,text/plain,*/*',
-                    'accept-language': 'en-US,en;q=0.9',
-                    'user-agent':
-                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-                },
-                query: {
-                    client: 'gtx',
-                    sl: from,
-                    tl: to,
-                    hl: to,
-                    ie: 'UTF-8',
-                    oe: 'UTF-8',
-                    q: text,
-                },
-            });
-
-            if (res.ok) {
-                return parseResult(res.data);
-            }
-
-            lastError = new Error(compactError(res, host));
-            // Continue to the next host for any endpoint-specific failure rather
-            // than surfacing the first HTML interstitial or regional block.
-            continue;
+            return await route();
         } catch (error) {
             lastError = error instanceof Error ? error : new Error(String(error));
         }
