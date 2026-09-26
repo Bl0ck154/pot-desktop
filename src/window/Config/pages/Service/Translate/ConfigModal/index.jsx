@@ -8,69 +8,26 @@ import { ServiceSourceType, getServiceName, getServiceSouceType, whetherPluginSe
 
 export default function ConfigModal(props) {
     const { serviceInstanceKey, pluginList, isOpen, onOpenChange, updateServiceInstanceList } = props;
-
-    const serviceSourceType = getServiceSouceType(serviceInstanceKey)
-    const pluginServiceFlag = whetherPluginService(serviceInstanceKey)
-    const serviceName = getServiceName(serviceInstanceKey)
-
+    const serviceSourceType = getServiceSouceType(serviceInstanceKey);
+    const pluginServiceFlag = whetherPluginService(serviceInstanceKey);
+    const serviceName = getServiceName(serviceInstanceKey);
     const { t } = useTranslation();
     const ConfigComponent = pluginServiceFlag ? PluginConfig : builtinServices[serviceName].Config;
+    const builtinTitle = pluginServiceFlag ? '' : t(`services.translate.${serviceName}.title`, {
+        defaultValue: builtinServices[serviceName].info.displayName ?? builtinServices[serviceName].info.name,
+    });
 
-    return pluginServiceFlag && !(serviceName in pluginList) ? (
-        <></>
-    ) : (
-        <Modal
-            isOpen={isOpen}
-            onOpenChange={onOpenChange}
-            scrollBehavior='inside'
-        >
+    return pluginServiceFlag && !(serviceName in pluginList) ? <></> : (
+        <Modal isOpen={isOpen} onOpenChange={onOpenChange} scrollBehavior='inside'>
             <ModalContent className='max-h-[75vh]'>
                 {(onClose) => (
                     <>
                         <ModalHeader>
-                            {serviceSourceType === ServiceSourceType.BUILDIN && (
-                                <>
-                                    <img
-                                        src={builtinServices[serviceName].info.icon}
-                                        className='h-[24px] w-[24px] my-auto'
-                                        draggable={false}
-                                    />
-                                    <Spacer x={2} />
-                                    {t(`services.translate.${serviceName}.title`)}
-                                </>
-                            )}
-                            {pluginServiceFlag && (
-                                <>
-                                    <img
-                                        src={pluginList[serviceName].icon}
-                                        className='h-[24px] w-[24px] my-auto'
-                                        draggable={false}
-                                    />
-
-                                    <Spacer x={2} />
-                                    {`${pluginList[serviceName].display} [${t('common.plugin')}]`}
-                                </>
-                            )}
+                            {serviceSourceType === ServiceSourceType.BUILDIN && <><img src={builtinServices[serviceName].info.icon} className='h-[24px] w-[24px] my-auto' draggable={false} /><Spacer x={2} />{builtinTitle}</>}
+                            {pluginServiceFlag && <><img src={pluginList[serviceName].icon} className='h-[24px] w-[24px] my-auto' draggable={false} /><Spacer x={2} />{`${pluginList[serviceName].display} [${t('common.plugin')}]`}</>}
                         </ModalHeader>
-                        <ModalBody>
-                            <ConfigComponent
-                                name={serviceName}
-                                instanceKey={serviceInstanceKey}
-                                pluginType='translate'
-                                pluginList={pluginList}
-                                updateServiceList={updateServiceInstanceList}
-                                onClose={onClose}
-                            />
-                        </ModalBody>
-                        <ModalFooter>
-                            <Button
-                                color='danger'
-                                variant='light'
-                                onPress={onClose}
-                            >
-                                {t('common.cancel')}
-                            </Button>
-                        </ModalFooter>
+                        <ModalBody><ConfigComponent name={serviceName} instanceKey={serviceInstanceKey} pluginType='translate' pluginList={pluginList} updateServiceList={updateServiceInstanceList} onClose={onClose} /></ModalBody>
+                        <ModalFooter><Button color='danger' variant='light' onPress={onClose}>{t('common.cancel')}</Button></ModalFooter>
                     </>
                 )}
             </ModalContent>
