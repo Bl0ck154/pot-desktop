@@ -1,7 +1,5 @@
-import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Button } from '@nextui-org/react';
+import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Button, Switch } from '@nextui-org/react';
 import { atom, useAtom, useSetAtom, useAtomValue } from 'jotai';
-import { fetch, Body } from '@tauri-apps/api/http';
-import { WebviewWindow } from '@tauri-apps/api/window';
 import { useTranslation } from 'react-i18next';
 import { HiTranslate } from 'react-icons/hi';
 import { GiCycle } from 'react-icons/gi';
@@ -26,11 +24,10 @@ export const languageAtom = atom();
 export const recognizeFlagAtom = atom();
 
 export default function ControlArea(props) {
-    const { serviceInstanceConfigMap, serviceInstanceList } = props;
+    const { serviceInstanceConfigMap, serviceInstanceList, onTranslate } = props;
     const pluginList = useAtomValue(pluginListAtom);
     const [recognizeLanguage] = useConfig('recognize_language', 'auto');
-    const [serverPort] = useConfig('server_port', 60828);
-    const [hideTranslateWindow] = useConfig('translate_hide_window', false);
+    const [autoTranslate, setAutoTranslate] = useConfig('recognize_auto_translate', false);
     const setRecognizeFlag = useSetAtom(recognizeFlagAtom);
     const [currentServiceInstanceKey, setCurrentServiceInstanceKey] = useAtom(currentServiceInstanceKeyAtom);
     const [language, setLanguage] = useAtom(languageAtom);
@@ -52,7 +49,7 @@ export default function ControlArea(props) {
     }, [serviceInstanceList, recognizeLanguage]);
 
     return (
-        <div className='flex justify-between px-[12px] h-full'>
+        <div className='flex justify-between gap-[8px] px-[12px] h-full'>
             {currentServiceInstanceKey && (
                 <Dropdown>
                     <DropdownTrigger>
@@ -159,40 +156,27 @@ export default function ControlArea(props) {
             >
                 {t('recognize.recognize')}
             </Button>
+            {autoTranslate !== null && (
+                <Switch
+                    size='sm'
+                    className='my-auto'
+                    isSelected={autoTranslate}
+                    onValueChange={setAutoTranslate}
+                >
+                    <span className='text-small whitespace-nowrap'>
+                        {t('recognize.auto_translate', { defaultValue: 'Auto translate' })}
+                    </span>
+                </Switch>
+            )}
             <Button
                 variant='flat'
                 color='primary'
                 size='sm'
                 className='my-auto'
                 startContent={<HiTranslate className='text-[16px]' />}
-                onPress={async () => {
-                    if (!text) {
-                        return;
-                    }
-
-                    try {
-                        await fetch(`http://127.0.0.1:${serverPort}/translate`, {
-                            method: 'POST',
-                            body: Body.text(text),
-                            responseType: 2,
-                        });
-
-                        // The backend creates the translation window hidden and the frontend
-                        // normally shows it after receiving `new_text`. On some systems that
-                        // event/show sequence is racy, leaving a successfully created window
-                        // invisible. After the HTTP request completes, the window already
-                        // exists, so make it visible and focused unless the user explicitly
-                        // configured translation windows to stay hidden.
-                        if (!hideTranslateWindow) {
-                            const translateWindow = WebviewWindow.getByLabel('translate');
-                            if (translateWindow) {
-                                await translateWindow.show();
-                                await translateWindow.setFocus();
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to open translation window from OCR:', error);
-                    }
+                isDisabled={!text}
+                onPress={() => {
+                    if (text) onTranslate?.();
                 }}
             >
                 {t('recognize.translate')}

@@ -16,7 +16,7 @@ export function Config(props) {
         instanceKey,
         {
             [INSTANCE_NAME_CONFIG_KEY]: t('services.translate.google.title'),
-            custom_url: 'https://translate.google.com',
+            custom_url: 'https://translate.googleapis.com',
         },
         { sync: false }
     );

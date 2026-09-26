@@ -1,12 +1,12 @@
 import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/api/fs';
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/tauri';
-import { appWindow } from '@tauri-apps/api/window';
-import React, { useState, useEffect } from 'react';
+import { appWindow, currentMonitor, LogicalPosition, LogicalSize } from '@tauri-apps/api/window';
+import React, { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { Button } from '@nextui-org/react';
 import { BsPinFill } from 'react-icons/bs';
-import { atom, useAtom } from 'jotai';
+import { atom, useAtom, useAtomValue } from 'jotai';
 
 import WindowControl from '../../components/WindowControl';
 import { store } from '../../utils/store';
@@ -14,7 +14,8 @@ import { osType } from '../../utils/env';
 import { useConfig } from '../../hooks';
 import ControlArea from './ControlArea';
 import ImageArea from './ImageArea';
-import TextArea from './TextArea';
+import TextArea, { textAtom } from './TextArea';
+import TranslatePanel from './TranslatePanel';
 
 export const pluginListAtom = atom();
 
@@ -53,9 +54,14 @@ void listen('tauri://focus', () => {
 export default function Recognize() {
     const [pluginList, setPluginList] = useAtom(pluginListAtom);
     const [closeOnBlur] = useConfig('recognize_close_on_blur', false);
+    const [autoTranslate] = useConfig('recognize_auto_translate', false);
     const [pined, setPined] = useState(false);
+    const [translatePanelOpen, setTranslatePanelOpen] = useState(false);
     const [serviceInstanceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
     const [serviceInstanceConfigMap, setServiceInstanceConfigMap] = useState(null);
+    const text = useAtomValue(textAtom);
+    const baseWindowGeometryRef = useRef(null);
+    const expandedRef = useRef(false);
 
     const loadPluginList = async () => {
         let temp = {};
@@ -102,6 +108,70 @@ export default function Recognize() {
         }
     }, [closeOnBlur]);
 
+    // Auto translate means: as soon as OCR produces non-empty text, open the
+    // embedded panel. TargetArea reacts to sourceTextAtom and starts translation.
+    useEffect(() => {
+        if (autoTranslate && text) {
+            setTranslatePanelOpen(true);
+        }
+    }, [autoTranslate, text]);
+
+    // Grow the native OCR window when the embedded panel opens. Preserve the
+    // previous geometry and restore it when the panel closes. This keeps the OCR
+    // columns at their old width instead of squeezing them to make room.
+    useEffect(() => {
+        const syncWindowSize = async () => {
+            const monitor = await currentMonitor();
+            if (!monitor) return;
+
+            const factor = monitor.scaleFactor;
+            const monitorSize = monitor.size.toLogical(factor);
+            const monitorPosition = monitor.position.toLogical(factor);
+
+            if (translatePanelOpen) {
+                if (!expandedRef.current) {
+                    const size = (await appWindow.outerSize()).toLogical(factor);
+                    const position = (await appWindow.outerPosition()).toLogical(factor);
+                    baseWindowGeometryRef.current = {
+                        width: size.width,
+                        height: size.height,
+                        x: position.x,
+                        y: position.y,
+                    };
+                }
+
+                const base = baseWindowGeometryRef.current;
+                if (!base) return;
+
+                const margin = 8;
+                const desiredWidth = Math.min(base.width + 420, monitorSize.width - margin * 2);
+                const monitorRight = monitorPosition.x + monitorSize.width;
+                const desiredX = Math.max(
+                    monitorPosition.x + margin,
+                    Math.min(base.x, monitorRight - desiredWidth - margin)
+                );
+                const desiredY = Math.max(
+                    monitorPosition.y + margin,
+                    Math.min(base.y, monitorPosition.y + monitorSize.height - base.height - margin)
+                );
+
+                await appWindow.setSize(new LogicalSize(desiredWidth, base.height));
+                await appWindow.setPosition(new LogicalPosition(desiredX, desiredY));
+                expandedRef.current = true;
+            } else if (expandedRef.current && baseWindowGeometryRef.current) {
+                const base = baseWindowGeometryRef.current;
+                await appWindow.setSize(new LogicalSize(base.width, base.height));
+                await appWindow.setPosition(new LogicalPosition(base.x, base.y));
+                expandedRef.current = false;
+                baseWindowGeometryRef.current = null;
+            }
+        };
+
+        syncWindowSize().catch((error) => {
+            console.error('Failed to resize OCR window for translation panel:', error);
+        });
+    }, [translatePanelOpen]);
+
     return (
         pluginList &&
         serviceInstanceConfigMap !== null && (
@@ -138,19 +208,34 @@ export default function Recognize() {
                     </Button>
                     {osType !== 'Darwin' && <WindowControl />}
                 </div>
-                <div
-                    className={`${
-                        osType === 'Linux' ? 'h-[calc(100vh-87px)]' : 'h-[calc(100vh-85px)]'
-                    } grid grid-cols-2`}
-                >
-                    <ImageArea />
-                    <TextArea serviceInstanceConfigMap={serviceInstanceConfigMap} />
-                </div>
-                <div className='h-[50px]'>
-                    <ControlArea
-                        serviceInstanceList={serviceInstanceList}
-                        serviceInstanceConfigMap={serviceInstanceConfigMap}
-                    />
+
+                <div className='h-[calc(100vh-35px)] flex overflow-hidden'>
+                    <div className='flex-1 min-w-0 h-full flex flex-col'>
+                        <div className='flex-1 min-h-0 grid grid-cols-2'>
+                            <ImageArea />
+                            <TextArea serviceInstanceConfigMap={serviceInstanceConfigMap} />
+                        </div>
+                        <div className='h-[50px] shrink-0'>
+                            <ControlArea
+                                serviceInstanceList={serviceInstanceList}
+                                serviceInstanceConfigMap={serviceInstanceConfigMap}
+                                onTranslate={() => setTranslatePanelOpen(true)}
+                            />
+                        </div>
+                    </div>
+
+                    <div
+                        className={`h-full shrink-0 overflow-hidden transition-[width,opacity] duration-200 ease-out ${
+                            translatePanelOpen ? 'w-[420px] opacity-100' : 'w-0 opacity-0'
+                        }`}
+                    >
+                        {translatePanelOpen && (
+                            <TranslatePanel
+                                text={text}
+                                onClose={() => setTranslatePanelOpen(false)}
+                            />
+                        )}
+                    </div>
                 </div>
             </div>
         )
