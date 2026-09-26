@@ -77,7 +77,10 @@ export async function translate(text, from, to, options = {}) {
 
     for (const host of hosts) {
         try {
-            const res = await fetch(`${host}/translate_a/single`, {
+            // Request the small set of metadata used by Pot's dictionary UI in
+            // addition to the translated text. Keeping repeated dt parameters
+            // in the URL avoids them being flattened by Tauri's query object.
+            const res = await fetch(`${host}/translate_a/single?dt=t&dt=bd&dt=rm&dt=ex`, {
                 method: 'GET',
                 headers: {
                     accept: 'application/json,text/plain,*/*',
@@ -92,7 +95,6 @@ export async function translate(text, from, to, options = {}) {
                     hl: to,
                     ie: 'UTF-8',
                     oe: 'UTF-8',
-                    dt: 't',
                     q: text,
                 },
             });
