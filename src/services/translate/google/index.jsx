@@ -28,6 +28,19 @@ function browserHeaders() {
 }
 
 function parseClients5(result) {
+    // With q in a form-encoded POST Google commonly returns an array such as
+    // [["translation", ...]]. A single q in the query string can instead return
+    // the Dictionary-extension object shape with sentences[].trans. Support both
+    // so a backend response-shape change does not break the provider.
+    if (result && !Array.isArray(result) && Array.isArray(result.sentences)) {
+        const text = result.sentences
+            .map((sentence) => sentence?.trans ?? '')
+            .filter(Boolean)
+            .join('')
+            .trim();
+        if (text) return text;
+    }
+
     if (!Array.isArray(result) || result.length === 0) throw new Error('Unexpected Google clients5 response');
     const first = result[0];
     if (typeof first === 'string') return first.trim();
@@ -44,14 +57,20 @@ function parseSingle(result) {
         if (pronunciation) target.pronunciations.push({ symbol: pronunciation, voice: '' });
         for (const item of result[1]) {
             if (!item) continue;
-            target.explanations.push({ trait: item[0], explains: Array.isArray(item[2]) ? item[2].map((x) => x?.[0]).filter(Boolean) : [] });
+            target.explanations.push({
+                trait: item[0],
+                explains: Array.isArray(item[2]) ? item[2].map((x) => x?.[0]).filter(Boolean) : [],
+            });
         }
         if (Array.isArray(result?.[13]?.[0])) {
             for (const item of result[13][0]) if (item?.[0]) target.sentence.push({ source: item[0] });
         }
         return target;
     }
-    return result[0].map((part) => part?.[0] ?? '').join('').trim();
+    return result[0]
+        .map((part) => part?.[0] ?? '')
+        .join('')
+        .trim();
 }
 
 function compactError(res, route) {
@@ -82,7 +101,11 @@ function parseRpcPayload(raw) {
     const payload = JSON.parse(envelope?.[0]?.[2]);
     const parts = payload?.[1]?.[0]?.[0]?.[5];
     if (Array.isArray(parts)) {
-        const text = parts.map((item) => item?.[0] ?? '').filter(Boolean).join(' ').trim();
+        const text = parts
+            .map((item) => item?.[0] ?? '')
+            .filter(Boolean)
+            .join(' ')
+            .trim();
         if (text) return text;
     }
     const fallback = payload?.[1]?.[0]?.[0]?.[0];
