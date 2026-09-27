@@ -11,53 +11,31 @@ export default function SelectModal(props) {
     const { t } = useTranslation();
 
     return (
-        <Modal
-            isOpen={isOpen}
-            onOpenChange={onOpenChange}
-            scrollBehavior='inside'
-        >
+        <Modal isOpen={isOpen} onOpenChange={onOpenChange} scrollBehavior='inside'>
             <ModalContent className='max-h-[80vh]'>
                 {(onClose) => (
                     <>
                         <ModalHeader>{t('config.service.add_service')}</ModalHeader>
                         <ModalBody>
                             {Object.keys(builtinServices).map((x) => {
+                                const service = builtinServices[x];
+                                const title = t(`services.recognize.${service.info.name}.title`, {
+                                    defaultValue: service.info.displayName ?? service.info.name,
+                                });
                                 return (
                                     <div key={x}>
                                         <Button
                                             fullWidth
-                                            onPress={() => {
-                                                setCurrentConfigKey(createServiceInstanceKey(x));
-                                                onConfigOpen();
-                                            }}
-                                            startContent={
-                                                <img
-                                                    src={
-                                                        x === 'system'
-                                                            ? `logo/${osType}.svg`
-                                                            : builtinServices[x].info.icon
-                                                    }
-                                                    className='h-[24px] w-[24px] my-auto'
-                                                />
-                                            }
+                                            onPress={() => { setCurrentConfigKey(createServiceInstanceKey(x)); onConfigOpen(); }}
+                                            startContent={<img src={x === 'system' ? `logo/${osType}.svg` : service.info.icon} className='h-[24px] w-[24px] my-auto' />}
                                         >
-                                            <div className='w-full'>
-                                                {t(`services.recognize.${builtinServices[x].info.name}.title`)}
-                                            </div>
+                                            <div className='w-full'>{title}</div>
                                         </Button>
                                     </div>
                                 );
                             })}
                         </ModalBody>
-                        <ModalFooter>
-                            <Button
-                                color='danger'
-                                variant='light'
-                                onPress={onClose}
-                            >
-                                {t('common.cancel')}
-                            </Button>
-                        </ModalFooter>
+                        <ModalFooter><Button color='danger' variant='light' onPress={onClose}>{t('common.cancel')}</Button></ModalFooter>
                     </>
                 )}
             </ModalContent>

@@ -13,6 +13,9 @@ import * as _tencent_img_ocr from './tencent_img';
 import * as _volcengine_ocr from './volcengine';
 import * as _volcengine_multi_lang_ocr from './volcengine_multi_lang';
 import * as _qrcode from './qrcode';
+import * as _mistral_ocr from './mistral';
+import * as _ocrspace_ocr from './ocrspace';
+import * as _auto_ocr from './auto_ocr';
 
 export const system = _system;
 export const tesseract = _tesseract;
@@ -29,3 +32,6 @@ export const tencent_img_ocr = _tencent_img_ocr;
 export const volcengine_ocr = _volcengine_ocr;
 export const volcengine_multi_lang_ocr = _volcengine_multi_lang_ocr;
 export const qrcode = _qrcode;
+export const mistral_ocr = _mistral_ocr;
+export const ocrspace_ocr = _ocrspace_ocr;
+export const auto_ocr = _auto_ocr;
