@@ -14,16 +14,19 @@ function normalizeHost(value) {
     return host.replace(/\/$/, '');
 }
 
-function browserHeaders() {
+function commonHeaders() {
     return {
         accept: '*/*',
         'accept-language': 'en-US,en;q=0.9',
+        'user-agent': USER_AGENT,
+    };
+}
+
+function browserHeaders() {
+    return {
+        ...commonHeaders(),
         referer: 'https://translate.google.com/',
         cookie: 'CONSENT=YES+cb',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'user-agent': USER_AGENT,
     };
 }
 
@@ -83,7 +86,7 @@ function compactError(res, route) {
 async function translateViaClients5(text, from, to) {
     const res = await fetch(GOOGLE_CLIENTS5_URL, {
         method: 'POST',
-        headers: { ...browserHeaders(), 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        headers: { ...commonHeaders(), 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' },
         query: { client: 'dict-chrome-ex', sl: from || 'auto', tl: to, ie: 'UTF-8', oe: 'UTF-8' },
         body: Body.text(`q=${encodeURIComponent(text)}`),
     });
