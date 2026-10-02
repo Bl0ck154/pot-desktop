@@ -4,19 +4,54 @@ import { DropdownTrigger } from '@nextui-org/react';
 import { DropdownMenu } from '@nextui-org/react';
 import { DropdownItem } from '@nextui-org/react';
 import { Dropdown } from '@nextui-org/react';
+import { readText } from '@tauri-apps/api/clipboard';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/api/shell';
 import React from 'react';
 
 import { useConfig } from '../../../../../hooks';
 
+const isCredentialField = (key = '') => /(api.?key|token|secret|password|credential)/i.test(key);
+
 export function PluginConfig(props) {
-    const { instanceKey, updateServiceList, onClose, name, pluginList } = props;
+    const { instanceKey, updateServiceList, onClose, name, pluginList, formId } = props;
     const [pluginConfig, setPluginConfig] = useConfig(instanceKey, {}, { sync: false });
     const { t } = useTranslation();
 
+    const setInputValue = (key, value) => {
+        setPluginConfig({
+            ...pluginConfig,
+            [key]: value,
+        });
+    };
+
+    const pasteFromClipboard = async (key) => {
+        try {
+            const value = await readText();
+            if (value !== null) {
+                setInputValue(key, value);
+            }
+        } catch (error) {
+            console.error('Failed to read clipboard for plugin config:', error);
+        }
+    };
+
+    const handlePasteShortcut = async (event, key) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
+            event.preventDefault();
+            await pasteFromClipboard(key);
+        }
+    };
+
+    const saveConfig = (event) => {
+        event.preventDefault();
+        setPluginConfig(pluginConfig, true);
+        updateServiceList(instanceKey);
+        onClose();
+    };
+
     return (
-        <>
+        <form id={formId} onSubmit={saveConfig} className='space-y-4'>
             <div className={'config-item'}>
                 <h3 className='my-auto select-none cursor-default'>{t('config.service.homepage')}</h3>
                 <Button
@@ -53,6 +88,9 @@ export function PluginConfig(props) {
                 <div>{t('services.no_need')}</div>
             ) : (
                 pluginList[name].needs.map((x) => {
+                    const inputValue = `${pluginConfig?.hasOwnProperty(x.key) ? pluginConfig[x.key] : x.default ?? ''}`;
+                    const credentialField = isCredentialField(x.key);
+
                     return (
                         pluginConfig &&
                         (x.type ? (
@@ -62,17 +100,26 @@ export function PluginConfig(props) {
                             >
                                 <h3 className='my-auto select-none cursor-default'>{x.display}</h3>
                                 {x.type === 'input' && (
-                                    <Input
-                                        value={`${pluginConfig.hasOwnProperty(x.key) ? pluginConfig[x.key] : ''}`}
-                                        variant='bordered'
-                                        className='max-w-[50%]'
-                                        onValueChange={(value) => {
-                                            setPluginConfig({
-                                                ...pluginConfig,
-                                                [x.key]: value,
-                                            });
-                                        }}
-                                    />
+                                    <div className='flex w-full max-w-[50%] items-center gap-2'>
+                                        <Input
+                                            value={inputValue}
+                                            variant='bordered'
+                                            className='min-w-0 flex-1'
+                                            onKeyDown={(event) => handlePasteShortcut(event, x.key)}
+                                            onValueChange={(value) => {
+                                                setInputValue(x.key, value);
+                                            }}
+                                        />
+                                        {credentialField && (
+                                            <Button
+                                                size='sm'
+                                                variant='flat'
+                                                onPress={() => pasteFromClipboard(x.key)}
+                                            >
+                                                Paste
+                                            </Button>
+                                        )}
+                                    </div>
                                 )}
                                 {x.type === 'select' && (
                                     <Dropdown>
@@ -85,7 +132,7 @@ export function PluginConfig(props) {
                                                     x.options[
                                                         pluginConfig.hasOwnProperty(x.key)
                                                             ? pluginConfig[x.key]
-                                                            : Object.keys(x.options)[0]
+                                                            : x.default ?? Object.keys(x.options)[0]
                                                     ]
                                                 }
                                             </Button>
@@ -113,36 +160,31 @@ export function PluginConfig(props) {
                                 className={`config-item`}
                             >
                                 <h3 className='my-auto select-none cursor-default'>{x.display}</h3>
-                                <Input
-                                    value={`${pluginConfig.hasOwnProperty(x.key) ? pluginConfig[x.key] : ''}`}
-                                    variant='bordered'
-                                    className='max-w-[50%]'
-                                    onValueChange={(value) => {
-                                        setPluginConfig({
-                                            ...pluginConfig,
-                                            [x.key]: value,
-                                        });
-                                    }}
-                                />
+                                <div className='flex w-full max-w-[50%] items-center gap-2'>
+                                    <Input
+                                        value={inputValue}
+                                        variant='bordered'
+                                        className='min-w-0 flex-1'
+                                        onKeyDown={(event) => handlePasteShortcut(event, x.key)}
+                                        onValueChange={(value) => {
+                                            setInputValue(x.key, value);
+                                        }}
+                                    />
+                                    {credentialField && (
+                                        <Button
+                                            size='sm'
+                                            variant='flat'
+                                            onPress={() => pasteFromClipboard(x.key)}
+                                        >
+                                            Paste
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
                         ))
                     );
                 })
             )}
-
-            <div>
-                <Button
-                    fullWidth
-                    color='primary'
-                    onPress={() => {
-                        setPluginConfig(pluginConfig, true);
-                        updateServiceList(instanceKey);
-                        onClose();
-                    }}
-                >
-                    {t('common.save')}
-                </Button>
-            </div>
-        </>
+        </form>
     );
 }
