@@ -14,7 +14,7 @@ import { useConfig } from '../../../../../hooks';
 const isCredentialField = (key = '') => /(api.?key|token|secret|password|credential)/i.test(key);
 
 export function PluginConfig(props) {
-    const { instanceKey, updateServiceList, onClose, name, pluginList } = props;
+    const { instanceKey, updateServiceList, onClose, name, pluginList, formId } = props;
     const [pluginConfig, setPluginConfig] = useConfig(instanceKey, {}, { sync: false });
     const { t } = useTranslation();
 
@@ -43,8 +43,15 @@ export function PluginConfig(props) {
         }
     };
 
+    const saveConfig = (event) => {
+        event.preventDefault();
+        setPluginConfig(pluginConfig, true);
+        updateServiceList(instanceKey);
+        onClose();
+    };
+
     return (
-        <>
+        <form id={formId} onSubmit={saveConfig} className='space-y-4'>
             <div className={'config-item'}>
                 <h3 className='my-auto select-none cursor-default'>{t('config.service.homepage')}</h3>
                 <Button
@@ -178,20 +185,6 @@ export function PluginConfig(props) {
                     );
                 })
             )}
-
-            <div className='sticky bottom-0 z-20 -mx-3 mt-4 border-t border-divider bg-content1/95 px-3 py-3 backdrop-blur'>
-                <Button
-                    fullWidth
-                    color='primary'
-                    onPress={() => {
-                        setPluginConfig(pluginConfig, true);
-                        updateServiceList(instanceKey);
-                        onClose();
-                    }}
-                >
-                    {t('common.save')}
-                </Button>
-            </div>
-        </>
+        </form>
     );
 }
